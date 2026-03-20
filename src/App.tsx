@@ -3151,7 +3151,7 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-bg text-text max-w-[430px] mx-auto relative shadow-2xl shadow-black/10">
+    <div className="min-h-screen bg-bg text-text max-w-[430px] mx-auto relative shadow-2xl shadow-black/10 safe-area-top">
       <AnimatePresence mode="wait">
         <motion.div
           key={activeTab}
