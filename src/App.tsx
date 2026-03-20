@@ -1059,6 +1059,18 @@ const Dashboard = ({ setActiveTab }: { setActiveTab: (tab: string) => void }) =>
   const { goals } = useGoalStore();
   const { accounts } = useAccountStore();
   const currency = profile?.currency || 'LKR';
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
   const budgets = profile?.categoryBudgets || {};
   
   const income = transactions.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + t.amount, 0);
@@ -1101,6 +1113,11 @@ const Dashboard = ({ setActiveTab }: { setActiveTab: (tab: string) => void }) =>
           </h1>
         </div>
         <div className="flex items-center gap-2">
+          {isOffline && (
+            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-red/10 text-red text-[8px] font-black uppercase rounded-full border border-red/20 animate-pulse">
+              <AlertCircle size={10} /> Offline
+            </div>
+          )}
           <button className="w-7 h-7 bg-bg-2 rounded-full flex items-center justify-center border border-border">
             <Bell className="text-text-2 w-3.5 h-3.5" />
           </button>
