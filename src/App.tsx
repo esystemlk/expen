@@ -1220,6 +1220,7 @@ const Dashboard = ({ setActiveTab }: { setActiveTab: (tab: string) => void }) =>
   const { profile } = useUserStore();
   const { goals } = useGoalStore();
   const { accounts } = useAccountStore();
+  const { user } = useAuthStore();
   const currency = profile?.currency || 'LKR';
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
@@ -1271,7 +1272,7 @@ const Dashboard = ({ setActiveTab }: { setActiveTab: (tab: string) => void }) =>
             <p className="text-text-2 text-[8px] font-medium">Welcome back,</p>
           </div>
           <h1 className="text-sm font-black tracking-tight leading-tight flex items-center gap-1.5">
-            {profile?.displayName || 'User'} <Sparkles className="w-3 h-3 text-amber" />
+            {user?.displayName || profile?.displayName || 'User'} <Sparkles className="w-3 h-3 text-amber" />
           </h1>
         </div>
         <div className="flex items-center gap-2">
@@ -1283,10 +1284,10 @@ const Dashboard = ({ setActiveTab }: { setActiveTab: (tab: string) => void }) =>
           <button className="w-7 h-7 bg-bg-2 rounded-full flex items-center justify-center border border-border">
             <Bell className="text-text-2 w-3.5 h-3.5" />
           </button>
-          <div className="relative">
-            <div className="w-7 h-7 rounded-full bg-accent/20 flex items-center justify-center border border-accent/30 overflow-hidden">
-              {profile?.photoURL ? (
-                <img src={profile.photoURL} alt="Profile" className="w-full h-full object-cover" />
+          <div className="relative cursor-pointer" onClick={() => setActiveTab('profile')}>
+            <div className="w-7 h-7 rounded-full bg-accent/20 flex items-center justify-center border border-accent/30 overflow-hidden active:scale-95 transition-transform">
+              {user?.photoURL || profile?.photoURL ? (
+                <img src={user?.photoURL || profile?.photoURL || undefined} alt="Profile" className="w-full h-full object-cover" />
               ) : (
                 <UserIcon className="text-accent w-3.5 h-3.5" />
               )}
