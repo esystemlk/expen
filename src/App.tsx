@@ -82,6 +82,17 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import 'jspdf-autotable';
 import logo from './assets/logo.png';
+import { useAuthStore } from './store/useAuthStore';
+import { auth, db } from './services/firebase';
+import { 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut,
+  updateProfile as updateAuthProfile
+} from 'firebase/auth';
+import { syncLocalToFirestore, fetchUserFirestoreData } from './lib/sync';
 
 // --- Helpers ---
 
@@ -172,6 +183,157 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     return this.props.children;
   }
 }
+
+// --- Auth Components ---
+
+const LoginPrompt = ({ onLogin, onDismiss }: { onLogin: () => void, onDismiss: () => void }) => {
+  return (
+    <div className="fixed inset-0 z-[115] bg-black/60 backdrop-blur-md flex items-center justify-center p-6">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-bg w-full max-w-sm p-6 rounded-3xl border border-border shadow-2xl text-center"
+      >
+        <div className="w-20 h-20 mx-auto mb-6 bg-accent/10 rounded-2xl flex items-center justify-center drop-shadow-xl border border-accent/20">
+          <img src={logo} alt="Logo" className="w-14 h-14 object-contain" />
+        </div>
+        <h2 className="text-xl font-black mb-2 tracking-tight">Protect Your Data?</h2>
+        <p className="text-text-2 text-sm mb-8 leading-relaxed font-medium">
+          Securely sync your transactions and budgets to the cloud. Log in now to ensure your data is safe and accessible from any device.
+        </p>
+        
+        <div className="space-y-3">
+          <button 
+            onClick={onLogin}
+            className="w-full py-4 bg-accent text-white font-black rounded-2xl shadow-lg shadow-accent/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
+          >
+            <Sparkles size={18} /> Sign In Now
+          </button>
+          <button 
+            onClick={onDismiss}
+            className="w-full py-4 bg-bg-2 text-text-2 font-bold rounded-2xl hover:bg-bg-3 transition-colors active:scale-95"
+          >
+            Continue as Guest
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const LoginModal = ({ onClose }: { onClose: () => void }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isRegister, setIsRegister] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  
+  const handleEmailAuth = async () => {
+    if (!email || !password) return;
+    setLoading(true);
+    setError('');
+    try {
+      if (isRegister) {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+      onClose();
+    } catch (err: any) {
+      setError(err.message.replace('Firebase: ', ''));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+      onClose();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  return (
+    <div className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6">
+      <motion.div 
+        initial={{ y: 50, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="bg-bg w-full max-w-sm p-6 rounded-[2.5rem] border border-border shadow-2xl relative"
+      >
+        <button 
+          onClick={onClose}
+          className="absolute right-6 top-6 w-8 h-8 bg-bg-2 rounded-full flex items-center justify-center text-text-3 active:scale-90"
+        >
+          <X size={16} />
+        </button>
+        
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 mx-auto mb-4 bg-accent/10 rounded-lg flex items-center justify-center">
+            <img src={logo} alt="Logo" className="w-12 h-12" />
+          </div>
+          <h2 className="text-2xl font-black tracking-tighter">My ExpenS Cloud</h2>
+          <p className="text-text-2 text-[10px] font-bold uppercase tracking-widest mt-1">Keep your finances synced.</p>
+        </div>
+        
+        <div className="space-y-4">
+          <button 
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="w-full py-4 bg-bg-2 text-text font-bold rounded-2xl border border-border flex items-center justify-center gap-3 hover:bg-bg-3 active:scale-95 transition-all"
+          >
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/action/google.svg" className="w-5 h-5" alt="G" />
+            Continue with Google
+          </button>
+          
+          <div className="flex items-center gap-3 py-2">
+            <div className="h-[1px] bg-border flex-1" />
+            <span className="text-[9px] text-text-3 font-black uppercase tracking-widest">or use email</span>
+            <div className="h-[1px] bg-border flex-1" />
+          </div>
+          
+          <div className="space-y-2.5">
+             <input 
+               type="email" 
+               placeholder="Email Address" 
+               className="w-full bg-bg-2 p-3.5 rounded-xl outline-none border border-border text-xs font-bold focus:border-accent transition-colors"
+               value={email}
+               onChange={e => setEmail(e.target.value)}
+             />
+             <input 
+               type="password" 
+               placeholder="Password" 
+               className="w-full bg-bg-2 p-3.5 rounded-xl outline-none border border-border text-xs font-bold focus:border-accent transition-colors"
+               value={password}
+               onChange={e => setPassword(e.target.value)}
+             />
+          </div>
+          
+          {error && <p className="text-red text-[9px] font-bold text-center bg-red/10 p-2 rounded-lg">{error}</p>}
+          
+          <button 
+            onClick={handleEmailAuth}
+            disabled={loading}
+            className="w-full py-4 bg-accent text-white font-black rounded-2xl shadow-lg shadow-accent/20 active:scale-95 transition-all disabled:opacity-50"
+          >
+            {loading ? 'Authenticating...' : isRegister ? 'Create Account' : 'Sign in with Email'}
+          </button>
+          
+          <button 
+            onClick={() => setIsRegister(!isRegister)}
+            className="w-full text-center text-text-3 text-[9px] font-bold uppercase tracking-widest hover:text-accent transition-colors"
+          >
+            {isRegister ? 'Already have an account? Sign in' : 'New here? Create safe account'}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
 
 // --- Security & Summary Components ---
 
@@ -1459,6 +1621,7 @@ const Analytics = () => {
 const Profile = () => {
   const { transactions } = useTransactionStore();
   const { profile, updateProfile } = useUserStore();
+  const { user } = useAuthStore();
   const { recurringTransactions, deleteRecurring, toggleRecurring } = useRecurringStore();
   const { debts, deleteDebt, repayDebt } = useDebtStore();
   const { accounts } = useAccountStore();
@@ -1631,16 +1794,32 @@ const Profile = () => {
         </button>
       </div>
       
-      <div className="flex flex-col items-center mb-3">
-        <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center border-2 border-bg-2 mb-1.5 overflow-hidden">
-          {profile?.photoURL ? (
-            <img src={profile.photoURL} alt="Profile" className="w-full h-full object-cover" />
+      <div className="flex flex-col items-center mb-6">
+        <div className="w-16 h-16 rounded-full bg-accent/20 flex items-center justify-center border-4 border-bg mb-2 overflow-hidden shadow-xl shadow-accent/10">
+          {user?.photoURL || profile?.photoURL ? (
+            <img src={user?.photoURL || profile?.photoURL || undefined} alt="Profile" className="w-full h-full object-cover" />
           ) : (
-            <UserIcon className="text-accent w-5 h-5" />
+            <UserIcon className="text-accent w-6 h-6" />
           )}
         </div>
-        <h2 className="text-sm font-bold">{profile?.displayName || 'User'}</h2>
-        <p className="text-text-2 text-[9px]">{profile?.email}</p>
+        <h2 className="text-lg font-black tracking-tight">{user?.displayName || profile?.displayName || 'User'}</h2>
+        <p className="text-text-2 text-[10px] font-medium mb-4">{user?.email || profile?.email || 'Guest User'}</p>
+
+        {user ? (
+          <button 
+            onClick={() => signOut(auth)}
+            className="px-6 py-2 bg-red/10 text-red text-[10px] font-bold uppercase tracking-widest rounded-full flex items-center gap-2 hover:bg-red/20 transition-all active:scale-95"
+          >
+            <LogOut size={12} /> Sign Out of Cloud
+          </button>
+        ) : (
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-6 py-2 gradient-fab text-white text-[10px] font-bold uppercase tracking-widest rounded-full flex items-center gap-2 shadow-lg shadow-accent/20 active:scale-95 transition-all"
+          >
+            <span className="animate-pulse flex items-center gap-2"><Sparkles size={12} /> Protect Data via Cloud</span>
+          </button>
+        )}
       </div>
 
       <div className="space-y-4">
@@ -2805,8 +2984,38 @@ function AppContent() {
 
   const { profile, updateProfile } = useUserStore();
   const { recurringTransactions, updateRecurring } = useRecurringStore();
-  const { addTransaction } = useTransactionStore();
-  const { updateBalance } = useAccountStore();
+  const { transactions, addTransaction } = useTransactionStore();
+  const { accounts, updateBalance } = useAccountStore();
+  
+  const { user, initialize } = useAuthStore();
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+
+  useEffect(() => {
+    initialize();
+    
+    // Check if user is logged in, if not show prompt once
+    const guestTimer = setTimeout(() => {
+      if (!auth.currentUser && !localStorage.getItem('login_prompt_dismissed')) {
+        setShowLoginPrompt(true);
+      }
+    }, 4000);
+    return () => clearTimeout(guestTimer);
+  }, []);
+
+  // Multi-device sync on login
+  useEffect(() => {
+    if (user) {
+      const syncData = async () => {
+        const firestoreData = await fetchUserFirestoreData(user.uid);
+        if (firestoreData.profile) {
+          // Merge or overwrite? For now, if cloud has data, it wins for a simple sync
+          // await useUserStore.getState().sync(firestoreData.profile);
+        }
+      };
+      syncData();
+    }
+  }, [user]);
 
   useEffect(() => {
     (window as any).openAddAccount = () => setIsAddAccountOpen(true);
@@ -2978,6 +3187,22 @@ function AppContent() {
         )}
         {!profile?.agreedToTerms && (
           <AgreementModal onAccept={() => updateProfile({ agreedToTerms: true })} />
+        )}
+        {isLoginModalOpen && (
+          <LoginModal onClose={() => setIsLoginModalOpen(false)} />
+        )}
+
+        {showLoginPrompt && !user && (
+          <LoginPrompt 
+            onLogin={() => {
+              setShowLoginPrompt(false);
+              setIsLoginModalOpen(true);
+            }} 
+            onDismiss={() => {
+              setShowLoginPrompt(false);
+              localStorage.setItem('login_prompt_dismissed', 'true');
+            }} 
+          />
         )}
       </AnimatePresence>
     </div>
