@@ -1,0 +1,5 @@
+{
+  "name": "ExpenS",
+  "description": "A production-ready mobile-first expense tracking application with analytics and PDF reports.",
+  "requestFramePermissions": []
+}
