@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 export const getFinancialInsights = async (transactions: any[], profile: any) => {
+  if (!navigator.onLine) return "You're currently offline. Smart insights will update when your connection is restored!";
   if (!process.env.GEMINI_API_KEY) return "Add your Gemini API key to get personalized financial insights.";
 
   const prompt = `

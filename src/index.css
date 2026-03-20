@@ -2,21 +2,21 @@
 
 @theme {
   --color-bg: #FFFFFF;
-  --color-bg-2: #F8F9FA;
+  --color-bg-2: #F1F3F5;
   --color-bg-3: #E9ECEF;
   --color-card: #FFFFFF;
-  --color-card-2: #F1F3F5;
-  --color-accent: #6C5CE7;
-  --color-accent-2: #A29BFE;
-  --color-green: #00B894;
-  --color-red: #FF6B6B;
-  --color-amber: #FDCB6E;
-  --color-blue: #74B9FF;
-  --color-pink: #FD79A8;
-  --color-text: #1A1A1A;
-  --color-text-2: #6C757D;
-  --color-text-3: #ADB5BD;
-  --color-border: rgba(0,0,0,0.08);
+  --color-card-2: #F8F9FA;
+  --color-accent: #4834D4;
+  --color-accent-2: #686DE0;
+  --color-green: #20BF6B;
+  --color-red: #EB3B5A;
+  --color-amber: #F7B731;
+  --color-blue: #2D98DA;
+  --color-pink: #A55EEA;
+  --color-text: #2F3542;
+  --color-text-2: #57606F;
+  --color-text-3: #A4B0BE;
+  --color-border: rgba(47, 53, 66, 0.08);
 
   --radius-sm: 10px;
   --radius-md: 14px;
@@ -24,11 +24,38 @@
   --radius-xl: 24px;
 }
 
+.dark {
+  --color-bg: #0F172A;
+  --color-bg-2: #1E293B;
+  --color-bg-3: #334155;
+  --color-card: #1E293B;
+  --color-card-2: #0F172A;
+  --color-accent: #6366F1;
+  --color-accent-2: #818CF8;
+  --color-green: #10B981;
+  --color-red: #EF4444;
+  --color-amber: #F59E0B;
+  --color-blue: #3B82F6;
+  --color-pink: #EC4899;
+  --color-text: #F8FAFC;
+  --color-text-2: #94A3B8;
+  --color-text-3: #64748B;
+  --color-border: rgba(248, 250, 260, 0.1);
+}
+
 @layer base {
   body {
     @apply bg-bg text-text font-sans antialiased;
     background-color: var(--color-bg);
     color: var(--color-text);
+    touch-action: manipulation;
+  }
+
+  /* Prevent auto-zoom on iOS by ensuring input font-size is at least 16px on mobile */
+  @media screen and (max-width: 768px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
   }
 }
 
@@ -42,5 +69,19 @@
 
 .gradient-fab {
   background: linear-gradient(135deg, #6C5CE7, #FD79A8);
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
 }
 

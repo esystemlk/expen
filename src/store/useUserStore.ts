@@ -11,6 +11,13 @@ export interface UserProfile {
   monthlyBudget: number;
   categoryBudgets: Record<string, number>;
   createdAt: string;
+  theme: 'light' | 'dark';
+  agreedToTerms: boolean;
+  security: {
+    pin: string | null;
+    isLocked: boolean;
+    biometricEnabled: boolean;
+  };
 }
 
 interface UserStore {
@@ -29,6 +36,13 @@ const DEFAULT_PROFILE: UserProfile = {
   monthlyBudget: 0,
   categoryBudgets: {},
   createdAt: new Date().toISOString(),
+  theme: 'light',
+  agreedToTerms: false,
+  security: {
+    pin: null,
+    isLocked: false,
+    biometricEnabled: false,
+  },
 };
 
 export const useUserStore = create<UserStore>()(

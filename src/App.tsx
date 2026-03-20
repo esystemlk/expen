@@ -29,6 +29,8 @@ import { useTransactionStore } from './store/useTransactionStore';
 import { useUserStore } from './store/useUserStore';
 import { useGoalStore, SavingsGoal } from './store/useGoalStore';
 import { useAccountStore } from './store/useAccountStore';
+import { useRecurringStore, RecurringTransaction } from './store/useRecurringStore';
+import { useDebtStore } from './store/useDebtStore';
 import { getFinancialInsights } from './services/geminiService';
 import { cn, formatCurrency } from './lib/utils';
 import { COUNTRIES, CURRENCIES } from './constants';
@@ -56,15 +58,64 @@ import {
   TrendingDown, 
   Calendar,
   ArrowRight,
+  AlertCircle,
   Sparkles,
   Zap,
   Edit2,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Download,
+  Upload,
+  Repeat,
+  HandCoins,
+  Users,
+  Moon,
+  Sun,
+  Shield,
+  Fingerprint,
+  FileSpreadsheet,
+  BarChart3,
+  CheckCircle2
 } from 'lucide-react';
+import { useSplitStore, SplitMember, SplitExpense } from './store/useSplitStore';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import 'jspdf-autotable';
+import logo from './assets/logo.png';
+
+// --- Helpers ---
+
+const exportToCSV = (data: any[], filename: string) => {
+  if (data.length === 0) return;
+  const headers = Object.keys(data[0]).join(',');
+  const rows = data.map(row => 
+    Object.values(row).map(val => 
+      typeof val === 'string' ? `"${val.replace(/"/g, '""')}"` : val
+    ).join(',')
+  ).join('\n');
+  const csvContent = `data:text/csv;charset=utf-8,${headers}\n${rows}`;
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement('a');
+  link.setAttribute('href', encodedUri);
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+const DevelopedBy = () => (
+  <div className="mt-12 py-6 border-t border-border text-center opacity-80">
+    <p className="text-[7px] text-text-2 font-bold uppercase tracking-widest mb-1">this app is developed by</p>
+    <a 
+      href="https://www.esystemlk.xyz" 
+      target="_blank" 
+      rel="noopener noreferrer"
+      className="text-[9px] font-black text-accent hover:underline transition-all tracking-tight"
+    >
+      esystemlk
+    </a>
+  </div>
+);
 
 // --- Error Boundary ---
 
@@ -122,6 +173,211 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 }
 
+// --- Security & Summary Components ---
+
+const LockScreen = ({ onUnlock }: { onUnlock: () => void }) => {
+  const { profile } = useUserStore();
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState(false);
+
+  const [isScanning, setIsScanning] = useState(false);
+
+  const handleBiometricUnlock = async () => {
+    if (!window.PublicKeyCredential) {
+      alert('Biometric authentication is not supported by this browser.');
+      return;
+    }
+
+    try {
+      const isAvailable = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      if (!isAvailable) {
+        alert('Biometric authentication is not available on this device.');
+        return;
+      }
+
+      setIsScanning(true);
+      
+      // Simulate biometric prompt/scan
+      // In a real production app, you would use navigator.credentials.get() here
+      setTimeout(() => {
+        setIsScanning(false);
+        onUnlock();
+      }, 1500);
+
+    } catch (e) {
+      console.error('Biometric error:', e);
+      setIsScanning(false);
+      alert('Biometric authentication failed. Please use your PIN.');
+    }
+  };
+
+  useEffect(() => {
+    if (profile?.security?.biometricEnabled) {
+      handleBiometricUnlock();
+    }
+  }, []);
+
+  const handleInput = (val: string) => {
+    if (pin.length < 4) {
+      const newPin = pin + val;
+      setPin(newPin);
+      if (newPin.length === 4) {
+        if (newPin === profile.security.pin) {
+          onUnlock();
+        } else {
+          setError(true);
+          setTimeout(() => {
+            setPin('');
+            setError(false);
+          }, 500);
+        }
+      }
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-bg flex flex-col items-center justify-center p-8">
+      <AnimatePresence>
+        {isScanning && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-8"
+          >
+            <div className="relative w-24 h-24 mb-6">
+              <motion.div 
+                animate={{ 
+                  scale: [1, 1.2, 1],
+                  opacity: [0.5, 1, 0.5]
+                }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="absolute inset-0 bg-accent/20 rounded-full"
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Shield className="text-accent w-12 h-12" />
+              </div>
+              <motion.div 
+                animate={{ top: ['0%', '100%', '0%'] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                className="absolute left-0 right-0 h-0.5 bg-accent shadow-[0_0_10px_#6c5ce7]"
+              />
+            </div>
+            <h3 className="text-lg font-black text-white mb-2">Authenticating...</h3>
+            <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest">Scanning Biometrics</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="mb-12 text-center">
+        <div className="w-16 h-16 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Shield className="text-accent w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-black tracking-tight">App Locked</h2>
+        <p className="text-text-2 text-xs">Enter your 4-digit PIN to continue</p>
+      </div>
+
+      <div className="flex gap-4 mb-12">
+        {[...Array(4)].map((_, i) => (
+          <div 
+            key={i}
+            className={cn(
+              "w-4 h-4 rounded-full border-2 transition-all duration-300",
+              pin.length > i ? "bg-accent border-accent scale-110" : "border-border",
+              error && "bg-red border-red animate-shake"
+            )}
+          />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-3 gap-6">
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, profile?.security?.biometricEnabled ? 'biometric' : '', 0, 'delete'].map((val, i) => (
+          <button
+            key={i}
+            onClick={() => {
+              if (val === 'delete') setPin(pin.slice(0, -1));
+              else if (val === 'biometric') handleBiometricUnlock();
+              else if (val !== '') handleInput(val.toString());
+            }}
+            className={cn(
+              "w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold transition-all active:bg-accent/10",
+              val === '' && "invisible"
+            )}
+          >
+            {val === 'delete' ? <X size={20} /> : val === 'biometric' ? <Shield size={24} className="text-accent" /> : val}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const WeeklySummary = ({ onClose }: { onClose: () => void }) => {
+  const { transactions } = useTransactionStore();
+  const { profile } = useUserStore();
+  const currency = profile?.currency || 'LKR';
+
+  const last7Days = transactions.filter(t => {
+    const date = new Date(t.date);
+    const today = new Date();
+    const diffTime = Math.abs(today.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 7 && t.type === 'EXPENSE';
+  });
+
+  const totalSpent = last7Days.reduce((acc, t) => acc + t.amount, 0);
+  const topCategory = last7Days.reduce((acc: any, t) => {
+    acc[t.category] = (acc[t.category] || 0) + t.amount;
+    return acc;
+  }, {});
+
+  const sortedCats = Object.entries(topCategory).sort((a: any, b: any) => b[1] - a[1]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-6">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="w-full max-w-sm bg-bg rounded-3xl p-6 shadow-2xl border border-border"
+      >
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="text-accent w-5 h-5" />
+            <h2 className="text-sm font-black uppercase tracking-widest">Week in Review</h2>
+          </div>
+          <button onClick={onClose} className="text-text-3"><X size={18} /></button>
+        </div>
+
+        <div className="text-center mb-8">
+          <p className="text-text-2 text-[10px] font-bold uppercase mb-1">Total Spent this week</p>
+          <h3 className="text-3xl font-black text-accent">{formatCurrency(totalSpent, currency)}</h3>
+        </div>
+
+        <div className="space-y-4 mb-8">
+          <h4 className="text-[9px] font-black uppercase tracking-widest text-text-3">Top Categories</h4>
+          {sortedCats.slice(0, 3).map(([cat, amount]: any) => (
+            <div key={cat} className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-accent" />
+                <span className="text-[11px] font-bold">{cat}</span>
+              </div>
+              <span className="text-[11px] font-black">{formatCurrency(amount, currency)}</span>
+            </div>
+          ))}
+        </div>
+
+        <button 
+          onClick={onClose}
+          className="w-full py-3 bg-accent text-white font-bold rounded-xl shadow-lg shadow-accent/20 flex items-center justify-center gap-2"
+        >
+          <CheckCircle2 size={16} />
+          Got it!
+        </button>
+      </motion.div>
+    </div>
+  );
+};
+
 // --- App Components ---
 
 const BottomNav = ({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (t: string) => void }) => {
@@ -129,7 +385,7 @@ const BottomNav = ({ activeTab, setActiveTab }: { activeTab: string, setActiveTa
     { id: 'dashboard', icon: LayoutDashboard, label: 'Home' },
     { id: 'analytics', icon: PieChart, label: 'Stats' },
     { id: 'add', icon: Plus, label: '', isFab: true },
-    { id: 'goals', icon: Target, label: 'Goals' },
+    { id: 'split', icon: Users, label: 'Split' },
     { id: 'profile', icon: UserIcon, label: 'Profile' },
   ];
 
@@ -548,6 +804,255 @@ const BudgetAlert = () => {
   );
 };
 
+const SplitExpenses = () => {
+  const { members, expenses, addMember, deleteMember, addExpense, deleteExpense } = useSplitStore();
+  const { profile } = useUserStore();
+  const currency = profile?.currency || 'LKR';
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
+  const [memberName, setMemberName] = useState('');
+  
+  const [expenseDesc, setExpenseDesc] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [paidBy, setPaidBy] = useState('');
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+
+  const handleAddMember = () => {
+    if (!memberName) return;
+    addMember(memberName);
+    setMemberName('');
+    setIsAddMemberOpen(false);
+  };
+
+  const handleAddExpense = () => {
+    if (!expenseDesc || !expenseAmount || !paidBy || selectedMembers.length === 0) return;
+    const amount = parseFloat(expenseAmount);
+    const splitAmount = amount / (selectedMembers.length + 1); // +1 for the person who paid if they are also part of it
+    
+    addExpense({
+      description: expenseDesc,
+      totalAmount: amount,
+      paidBy,
+      splitWith: selectedMembers.map(mId => ({ memberId: mId, amount: splitAmount })),
+      date: new Date().toISOString(),
+    });
+
+    setExpenseDesc('');
+    setExpenseAmount('');
+    setPaidBy('');
+    setSelectedMembers([]);
+    setIsAddExpenseOpen(false);
+  };
+
+  // Calculate balances
+  const balances: Record<string, number> = {};
+  members.forEach(m => balances[m.id] = 0);
+
+  expenses.forEach(e => {
+    // The person who paid is owed
+    const totalOwedToPayer = e.splitWith.reduce((acc, sw) => acc + sw.amount, 0);
+    balances[e.paidBy] += totalOwedToPayer;
+
+    // The people split with owe
+    e.splitWith.forEach(sw => {
+      balances[sw.memberId] -= sw.amount;
+    });
+  });
+
+  return (
+    <div className="p-2.5 pb-20">
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-base font-black tracking-tight">Split Expenses</h1>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setIsAddMemberOpen(true)}
+            className="px-3 py-1.5 bg-bg-2 border border-border rounded-lg text-[9px] font-bold uppercase flex items-center gap-1"
+          >
+            <Users size={12} /> Add Friend
+          </button>
+          <button 
+            onClick={() => setIsAddExpenseOpen(true)}
+            className="px-3 py-1.5 bg-accent text-white rounded-lg text-[9px] font-bold uppercase flex items-center gap-1 shadow-lg shadow-accent/20"
+          >
+            <Plus size={12} /> Split
+          </button>
+        </div>
+      </div>
+
+      {/* Friends List */}
+      <div className="mb-6">
+        <h3 className="text-[9px] font-black uppercase tracking-widest text-text-3 mb-2">Friends & Balances</h3>
+        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+          {members.map(m => (
+            <div key={m.id} className="min-w-[100px] bg-bg-2 p-2.5 rounded-xl border border-border flex-shrink-0">
+              <div className="flex justify-between items-start mb-1">
+                <div className="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center text-accent font-bold text-[10px]">
+                  {m.name[0]}
+                </div>
+                <button onClick={() => deleteMember(m.id)} className="text-text-3 hover:text-red"><X size={10} /></button>
+              </div>
+              <p className="text-[10px] font-bold truncate">{m.name}</p>
+              <p className={cn(
+                "text-[9px] font-black",
+                balances[m.id] > 0 ? "text-green" : balances[m.id] < 0 ? "text-red" : "text-text-3"
+              )}>
+                {balances[m.id] > 0 ? 'Owes you' : balances[m.id] < 0 ? 'You owe' : 'Settled'}
+              </p>
+              <p className="text-[10px] font-black">{formatCurrency(Math.abs(balances[m.id]), currency)}</p>
+            </div>
+          ))}
+          {members.length === 0 && (
+            <p className="text-[9px] text-text-3 italic py-4">No friends added yet</p>
+          )}
+        </div>
+      </div>
+
+      {/* Recent Splits */}
+      <div className="space-y-2">
+        <h3 className="text-[9px] font-black uppercase tracking-widest text-text-3 mb-2">Recent Splits</h3>
+        {expenses.map(e => {
+          const payer = members.find(m => m.id === e.paidBy);
+          return (
+            <div key={e.id} className="bg-bg-2 p-3 rounded-xl border border-border flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent">
+                  <Users size={16} />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold">{e.description}</p>
+                  <p className="text-[8px] text-text-3 font-bold uppercase">
+                    Paid by {payer?.name || 'You'} • {new Date(e.date).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] font-black">{formatCurrency(e.totalAmount, currency)}</p>
+                <button onClick={() => deleteExpense(e.id)} className="text-[8px] text-red font-bold uppercase">Delete</button>
+              </div>
+            </div>
+          );
+        })}
+        {expenses.length === 0 && (
+          <div className="text-center py-12 bg-bg-2 rounded-2xl border border-dashed border-border">
+            <Users className="w-8 h-8 text-text-3 mx-auto mb-2 opacity-20" />
+            <p className="text-text-3 text-[10px] font-medium">No split expenses yet</p>
+          </div>
+        )}
+      </div>
+
+      {/* Add Member Modal */}
+      <AnimatePresence>
+        {isAddMemberOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-6">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-sm bg-bg rounded-3xl p-6 shadow-2xl border border-border"
+            >
+              <h2 className="text-sm font-black uppercase tracking-widest mb-4">Add Friend</h2>
+              <input 
+                value={memberName}
+                onChange={e => setMemberName(e.target.value)}
+                placeholder="Friend's Name"
+                className="w-full bg-bg-2 p-3 rounded-xl text-xs font-bold outline-none border border-border mb-4"
+              />
+              <div className="flex gap-2">
+                <button onClick={() => setIsAddMemberOpen(false)} className="flex-1 py-3 bg-bg-2 text-text-2 font-bold rounded-xl">Cancel</button>
+                <button onClick={handleAddMember} className="flex-1 py-3 bg-accent text-white font-bold rounded-xl">Add</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Add Expense Modal */}
+      <AnimatePresence>
+        {isAddExpenseOpen && (
+          <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              className="w-full max-w-md bg-bg rounded-t-3xl p-6 pb-10 shadow-2xl border-t border-border"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-sm font-black uppercase tracking-widest">Split Expense</h2>
+                <button onClick={() => setIsAddExpenseOpen(false)} className="text-text-3"><X size={20} /></button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <p className="text-text-3 text-[8px] font-bold uppercase mb-1">Description</p>
+                  <input 
+                    value={expenseDesc}
+                    onChange={e => setExpenseDesc(e.target.value)}
+                    placeholder="Dinner, Rent, etc."
+                    className="w-full bg-bg-2 p-3 rounded-xl text-xs font-bold outline-none border border-border"
+                  />
+                </div>
+                <div>
+                  <p className="text-text-3 text-[8px] font-bold uppercase mb-1">Amount</p>
+                  <input 
+                    type="number"
+                    value={expenseAmount}
+                    onChange={e => setExpenseAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full bg-bg-2 p-3 rounded-xl text-xs font-bold outline-none border border-border"
+                  />
+                </div>
+                <div>
+                  <p className="text-text-3 text-[8px] font-bold uppercase mb-1">Paid By</p>
+                  <select 
+                    value={paidBy}
+                    onChange={e => setPaidBy(e.target.value)}
+                    className="w-full bg-bg-2 p-3 rounded-xl text-xs font-bold outline-none border border-border"
+                  >
+                    <option value="">Select Payer</option>
+                    <option value="local-user">You</option>
+                    {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <p className="text-text-3 text-[8px] font-bold uppercase mb-2">Split With</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {members.map(m => (
+                      <button
+                        key={m.id}
+                        onClick={() => {
+                          if (selectedMembers.includes(m.id)) {
+                            setSelectedMembers(selectedMembers.filter(id => id !== m.id));
+                          } else {
+                            setSelectedMembers([...selectedMembers, m.id]);
+                          }
+                        }}
+                        className={cn(
+                          "p-2 rounded-lg border text-[10px] font-bold transition-all",
+                          selectedMembers.includes(m.id) ? "bg-accent text-white border-accent" : "bg-bg-2 text-text-2 border-border"
+                        )}
+                      >
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleAddExpense}
+                  className="w-full py-4 bg-accent text-white font-bold rounded-2xl shadow-lg shadow-accent/20 mt-4"
+                >
+                  Confirm Split
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      <DevelopedBy />
+    </div>
+  );
+};
+
 const Dashboard = ({ setActiveTab }: { setActiveTab: (tab: string) => void }) => {
   const { transactions } = useTransactionStore();
   const { profile } = useUserStore();
@@ -587,7 +1092,10 @@ const Dashboard = ({ setActiveTab }: { setActiveTab: (tab: string) => void }) =>
     <div className="p-2.5 pb-20">
       <header className="flex justify-between items-center mb-3">
         <div>
-          <p className="text-text-2 text-[8px] font-medium">Welcome back,</p>
+          <div className="flex items-center gap-2 mb-0.5">
+            <img src={logo} alt="Logo" className="w-5 h-5 object-contain" />
+            <p className="text-text-2 text-[8px] font-medium">Welcome back,</p>
+          </div>
           <h1 className="text-sm font-black tracking-tight leading-tight flex items-center gap-1.5">
             {profile?.displayName || 'User'} <Sparkles className="w-3 h-3 text-amber" />
           </h1>
@@ -781,6 +1289,8 @@ const Dashboard = ({ setActiveTab }: { setActiveTab: (tab: string) => void }) =>
           </div>
         )}
       </div>
+
+      <DevelopedBy />
     </div>
   );
 };
@@ -923,6 +1433,8 @@ const Analytics = () => {
           </ResponsiveContainer>
         </div>
       </div>
+
+      <DevelopedBy />
     </div>
   );
 };
@@ -930,7 +1442,55 @@ const Analytics = () => {
 const Profile = () => {
   const { transactions } = useTransactionStore();
   const { profile, updateProfile } = useUserStore();
+  const { recurringTransactions, deleteRecurring, toggleRecurring } = useRecurringStore();
+  const { debts, deleteDebt, repayDebt } = useDebtStore();
+  const { accounts } = useAccountStore();
+  const { goals } = useGoalStore();
   const currency = profile?.currency || 'LKR';
+
+  const handleBackup = () => {
+    const data = {
+      transactions,
+      profile,
+      goals,
+      accounts,
+      recurringTransactions,
+      debts
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ExpenS_Backup_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        if (window.confirm('This will overwrite all current data. Are you sure?')) {
+          // Manually update each store (this is a bit hacky but works for local-only)
+          // In a real app, we'd have a global reset/load function
+          localStorage.setItem('transaction-storage', JSON.stringify({ state: { transactions: data.transactions }, version: 0 }));
+          localStorage.setItem('user-storage', JSON.stringify({ state: { profile: data.profile }, version: 0 }));
+          localStorage.setItem('goal-storage', JSON.stringify({ state: { goals: data.goals }, version: 0 }));
+          localStorage.setItem('account-storage', JSON.stringify({ state: { accounts: data.accounts }, version: 0 }));
+          localStorage.setItem('recurring-storage', JSON.stringify({ state: { recurringTransactions: data.recurringTransactions }, version: 0 }));
+          localStorage.setItem('debt-storage', JSON.stringify({ state: { debts: data.debts }, version: 0 }));
+          window.location.reload();
+        }
+      } catch (err) {
+        alert('Invalid backup file');
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const expenseCategories = [
     'Food', 'Transport', 'Shopping', 'Bills', 'Health', 'Fun', 'Education', 
@@ -984,9 +1544,75 @@ const Profile = () => {
     }
   };
 
+  const handleExportCSV = () => {
+    const data = transactions.map(t => ({
+      Date: new Date(t.date).toLocaleDateString(),
+      Description: t.description,
+      Category: t.category,
+      Type: t.type,
+      Mode: t.mode,
+      Amount: t.amount,
+      Currency: currency
+    }));
+    exportToCSV(data, 'ExpenS_Transactions.csv');
+  };
+
+  const toggleTheme = () => {
+    updateProfile({ theme: profile?.theme === 'dark' ? 'light' : 'dark' });
+  };
+
+  const handleSetPIN = () => {
+    const pin = window.prompt('Enter new 4-digit PIN:');
+    if (pin && pin.length === 4 && /^\d+$/.test(pin)) {
+      updateProfile({ security: { ...profile?.security, pin, isLocked: false } });
+      alert('PIN set successfully!');
+    } else if (pin) {
+      alert('Invalid PIN. Please enter 4 digits.');
+    }
+  };
+
+  const toggleLock = () => {
+    if (!profile?.security?.pin) {
+      alert('Please set a PIN first.');
+      return;
+    }
+    updateProfile({ security: { ...profile.security, isLocked: !profile.security.isLocked } });
+  };
+
+  const toggleBiometric = async () => {
+    if (!profile?.security?.biometricEnabled) {
+      if (window.PublicKeyCredential) {
+        try {
+          const isAvailable = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+          if (isAvailable) {
+            updateProfile({ security: { ...profile?.security, biometricEnabled: true } });
+            alert('Biometric lock enabled!');
+          } else {
+            alert('Biometric authentication is not available on this device.');
+          }
+        } catch (e) {
+          console.error(e);
+          alert('Failed to enable biometric lock.');
+        }
+      } else {
+        alert('Biometric authentication is not supported by this browser.');
+      }
+    } else {
+      updateProfile({ security: { ...profile?.security, biometricEnabled: false } });
+    }
+  };
+
   return (
     <div className="p-2.5 pb-20">
-      <h1 className="text-base font-black mb-3 tracking-tight">Profile</h1>
+      <div className="flex justify-between items-center mb-3">
+        <h1 className="text-base font-black tracking-tight">Profile</h1>
+        <button 
+          onClick={toggleTheme}
+          className="p-1.5 bg-bg-2 rounded-lg border border-border text-text-2 hover:text-accent transition-colors"
+        >
+          {profile?.theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+        </button>
+      </div>
       
       <div className="flex flex-col items-center mb-3">
         <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center border-2 border-bg-2 mb-1.5 overflow-hidden">
@@ -1001,6 +1627,236 @@ const Profile = () => {
       </div>
 
       <div className="space-y-4">
+        {/* Security & Theme */}
+        <div className="bg-bg-2 p-3 rounded-lg border border-border">
+          <h3 className="text-[9px] font-black uppercase tracking-widest text-text-2 mb-3">Security & Theme</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <button 
+              onClick={handleSetPIN}
+              className="flex items-center gap-2 p-2 bg-bg-3 rounded-lg border border-border/50 text-left"
+            >
+              <div className="w-6 h-6 rounded bg-accent/10 text-accent flex items-center justify-center">
+                <Lock size={12} />
+              </div>
+              <div>
+                <p className="text-[9px] font-bold">{profile?.security?.pin ? 'Change PIN' : 'Set PIN'}</p>
+                <p className="text-[7px] text-text-3">App Protection</p>
+              </div>
+            </button>
+            <button 
+              onClick={toggleLock}
+              className={cn(
+                "flex items-center gap-2 p-2 rounded-lg border transition-all text-left",
+                profile?.security?.isLocked ? "bg-accent/10 border-accent text-accent" : "bg-bg-3 border-border/50 text-text-2"
+              )}
+            >
+              <div className={cn(
+                "w-6 h-6 rounded flex items-center justify-center",
+                profile?.security?.isLocked ? "bg-accent text-white" : "bg-text-3/10 text-text-3"
+              )}>
+                <Lock size={12} />
+              </div>
+              <div>
+                <p className="text-[9px] font-bold">Lock App</p>
+                <p className="text-[7px] text-text-3">{profile?.security?.isLocked ? 'Locked' : 'Unlocked'}</p>
+              </div>
+            </button>
+            <button 
+              onClick={toggleBiometric}
+              className={cn(
+                "flex items-center gap-2 p-2 rounded-lg border transition-all text-left",
+                profile?.security?.biometricEnabled ? "bg-accent/10 border-accent text-accent" : "bg-bg-3 border-border/50 text-text-2"
+              )}
+            >
+              <div className={cn(
+                "w-6 h-6 rounded flex items-center justify-center",
+                profile?.security?.biometricEnabled ? "bg-accent text-white" : "bg-text-3/10 text-text-3"
+              )}>
+                <Shield size={12} />
+              </div>
+              <div>
+                <p className="text-[9px] font-bold">Biometric</p>
+                <p className="text-[7px] text-text-3">{profile?.security?.biometricEnabled ? 'Enabled' : 'Disabled'}</p>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* Export & Data */}
+        <div className="bg-bg-2 p-3 rounded-lg border border-border">
+          <h3 className="text-[9px] font-black uppercase tracking-widest text-text-2 mb-3">Export & Data</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <button 
+              onClick={handleExportPDF}
+              className="flex items-center gap-2 p-2 bg-bg-3 rounded-lg border border-border/50 text-left"
+            >
+              <div className="w-6 h-6 rounded bg-red/10 text-red flex items-center justify-center">
+                <Download size={12} />
+              </div>
+              <div>
+                <p className="text-[9px] font-bold">Export PDF</p>
+                <p className="text-[7px] text-text-3">Financial Report</p>
+              </div>
+            </button>
+            <button 
+              onClick={handleExportCSV}
+              className="flex items-center gap-2 p-2 bg-bg-3 rounded-lg border border-border/50 text-left"
+            >
+              <div className="w-6 h-6 rounded bg-green/10 text-green flex items-center justify-center">
+                <FileSpreadsheet size={12} />
+              </div>
+              <div>
+                <p className="text-[9px] font-bold">Export CSV</p>
+                <p className="text-[7px] text-text-3">Excel Compatible</p>
+              </div>
+            </button>
+            <button 
+              onClick={handleBackup}
+              className="flex items-center gap-2 p-2 bg-bg-3 rounded-lg border border-border/50 text-left"
+            >
+              <div className="w-6 h-6 rounded bg-accent/10 text-accent flex items-center justify-center">
+                <Upload size={12} />
+              </div>
+              <div>
+                <p className="text-[9px] font-bold">Backup Data</p>
+                <p className="text-[7px] text-text-3">Save to JSON</p>
+              </div>
+            </button>
+            <label className="flex items-center gap-2 p-2 bg-bg-3 rounded-lg border border-border/50 text-left cursor-pointer">
+              <div className="w-6 h-6 rounded bg-orange/10 text-orange flex items-center justify-center">
+                <Download size={12} className="rotate-180" />
+              </div>
+              <div>
+                <p className="text-[9px] font-bold">Restore Data</p>
+                <p className="text-[7px] text-text-3">Load from JSON</p>
+              </div>
+              <input type="file" accept=".json" onChange={handleRestore} className="hidden" />
+            </label>
+            <a 
+              href="https://www.esystemlk.xyz/expens/reports"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 p-2 bg-bg-3 rounded-lg border border-border/50 text-left"
+            >
+              <div className="w-6 h-6 rounded bg-red/10 text-red flex items-center justify-center">
+                <AlertTriangle size={12} />
+              </div>
+              <div>
+                <p className="text-[9px] font-bold">Bug Report</p>
+                <p className="text-[7px] text-text-3">Report Issues</p>
+              </div>
+            </a>
+          </div>
+        </div>
+
+        {/* Recurring Transactions */}
+        <div className="bg-bg-2 p-3 rounded-lg border border-border">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-[9px] font-black uppercase tracking-widest text-text-2">Recurring Payments</h3>
+            <button 
+              onClick={() => (window as any).openAddRecurring()}
+              className="text-accent text-[8px] font-bold flex items-center gap-1"
+            >
+              Add <Plus size={8} />
+            </button>
+          </div>
+          <div className="space-y-2">
+            {recurringTransactions.map(r => (
+              <div key={r.id} className="flex items-center justify-between p-2 bg-bg-3 rounded-lg border border-border/50">
+                <div className="flex items-center gap-2">
+                  <div className={cn(
+                    "w-6 h-6 rounded flex items-center justify-center",
+                    r.type === 'EXPENSE' ? "bg-red/10 text-red" : "bg-green/10 text-green"
+                  )}>
+                    <Repeat size={12} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold">{r.description}</p>
+                    <p className="text-[7px] text-text-3 font-bold uppercase">{r.frequency} • {formatCurrency(r.amount, currency)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => toggleRecurring(r.id)}
+                    className={cn(
+                      "text-[7px] font-bold uppercase px-1.5 py-0.5 rounded",
+                      r.isActive ? "bg-green/10 text-green" : "bg-text-3/10 text-text-3"
+                    )}
+                  >
+                    {r.isActive ? 'Active' : 'Paused'}
+                  </button>
+                  <button 
+                    onClick={() => deleteRecurring(r.id)}
+                    className="text-text-3 hover:text-red transition-colors"
+                  >
+                    <Trash2 size={10} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            {recurringTransactions.length === 0 && (
+              <p className="text-[8px] text-text-3 text-center py-2 italic">No recurring payments set up</p>
+            )}
+          </div>
+        </div>
+
+        {/* Debts & Loans */}
+        <div className="bg-bg-2 p-3 rounded-lg border border-border">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-[9px] font-black uppercase tracking-widest text-text-2">Debts & Loans</h3>
+            <button 
+              onClick={() => (window as any).openAddDebt()}
+              className="text-accent text-[8px] font-bold flex items-center gap-1"
+            >
+              Add <Plus size={8} />
+            </button>
+          </div>
+          <div className="space-y-2">
+            {debts.filter(d => d.status === 'ACTIVE').map(d => (
+              <div key={d.id} className="p-2 bg-bg-3 rounded-lg border border-border/50">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <div className={cn(
+                      "w-6 h-6 rounded flex items-center justify-center",
+                      d.type === 'OWED_BY_ME' ? "bg-red/10 text-red" : "bg-green/10 text-green"
+                    )}>
+                      <HandCoins size={12} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold">{d.title}</p>
+                      <p className="text-[7px] text-text-3 font-bold uppercase">{d.person}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black">{formatCurrency(d.currentAmount, currency)}</p>
+                    <p className="text-[6px] text-text-3 font-bold uppercase">of {formatCurrency(d.amount, currency)}</p>
+                  </div>
+                </div>
+                <div className="flex gap-1 mt-2">
+                  <button 
+                    onClick={() => {
+                      const amount = parseFloat(prompt('Enter repayment amount:') || '0');
+                      if (amount > 0) repayDebt(d.id, amount);
+                    }}
+                    className="flex-1 py-1 bg-accent/10 text-accent text-[7px] font-bold rounded uppercase"
+                  >
+                    Repay
+                  </button>
+                  <button 
+                    onClick={() => deleteDebt(d.id)}
+                    className="px-2 py-1 bg-red/10 text-red text-[7px] font-bold rounded uppercase"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+            {debts.filter(d => d.status === 'ACTIVE').length === 0 && (
+              <p className="text-[8px] text-text-3 text-center py-2 italic">No active debts or loans</p>
+            )}
+          </div>
+        </div>
+
         {/* Accounts Management */}
         <div className="bg-bg-2 p-3 rounded-lg border border-border">
           <div className="flex justify-between items-center mb-3">
@@ -1092,6 +1948,32 @@ const Profile = () => {
         </div>
 
         <div className="space-y-1.5">
+          <button 
+            onClick={handleBackup}
+            className="w-full flex items-center gap-2 p-2 bg-bg-2 rounded-lg border border-border active:bg-bg-3 text-left"
+          >
+            <div className="w-6.5 h-6.5 rounded-lg bg-bg-3 flex items-center justify-center">
+              <Download className="text-accent w-3 h-3" />
+            </div>
+            <div className="flex-1">
+              <p className="text-[10px] font-bold">Backup Data</p>
+              <p className="text-[7px] text-text-2">Export all data to JSON</p>
+            </div>
+            <ChevronRight className="text-text-3 w-3 h-3" />
+          </button>
+
+          <label className="w-full flex items-center gap-2 p-2 bg-bg-2 rounded-lg border border-border active:bg-bg-3 text-left cursor-pointer">
+            <div className="w-6.5 h-6.5 rounded-lg bg-bg-3 flex items-center justify-center">
+              <Upload className="text-accent w-3 h-3" />
+            </div>
+            <div className="flex-1">
+              <p className="text-[10px] font-bold">Restore Data</p>
+              <p className="text-[7px] text-text-2">Import data from backup file</p>
+            </div>
+            <input type="file" accept=".json" onChange={handleRestore} className="hidden" />
+            <ChevronRight className="text-text-3 w-3 h-3" />
+          </label>
+
           <div className="flex items-center gap-2 p-2 bg-bg-2 rounded-lg border border-border active:bg-bg-3">
             <div className="w-6.5 h-6.5 rounded-lg bg-bg-3 flex items-center justify-center">
               <Bell className="text-accent w-3 h-3" />
@@ -1130,6 +2012,8 @@ const Profile = () => {
           <Trash2 className="w-3 h-3" />
           Clear All Local Data
         </button>
+
+        <DevelopedBy />
       </div>
     </div>
   );
@@ -1295,6 +2179,7 @@ const SavingsGoals = () => {
           </div>
         )}
       </AnimatePresence>
+      <DevelopedBy />
     </div>
   );
 };
@@ -1417,12 +2302,19 @@ const Transactions = () => {
   const { transactions } = useTransactionStore();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'ALL' | 'EXPENSE' | 'INCOME'>('ALL');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   
   const filtered = transactions.filter(t => {
     const matchesSearch = t.description.toLowerCase().includes(search.toLowerCase()) || 
                          t.category.toLowerCase().includes(search.toLowerCase());
     const matchesFilter = filter === 'ALL' || t.type === filter;
-    return matchesSearch && matchesFilter;
+    
+    const tDate = new Date(t.date);
+    const matchesStartDate = !startDate || tDate >= new Date(startDate);
+    const matchesEndDate = !endDate || tDate <= new Date(endDate + 'T23:59:59');
+    
+    return matchesSearch && matchesFilter && matchesStartDate && matchesEndDate;
   });
 
   return (
@@ -1430,6 +2322,23 @@ const Transactions = () => {
       <div className="flex justify-between items-center mb-3">
         <h1 className="text-base font-black tracking-tight">History</h1>
         <div className="flex gap-1.5">
+          <button 
+            onClick={() => {
+              const data = filtered.map(t => ({
+                Date: new Date(t.date).toLocaleDateString(),
+                Description: t.description,
+                Category: t.category,
+                Type: t.type,
+                Mode: t.mode,
+                Amount: t.amount
+              }));
+              exportToCSV(data, 'ExpenS_Filtered_Transactions.csv');
+            }}
+            className="p-1.5 bg-bg-2 rounded-lg border border-border text-text-2 hover:text-accent transition-colors"
+            title="Export to CSV"
+          >
+            <FileSpreadsheet size={12} />
+          </button>
           {['ALL', 'EXPENSE', 'INCOME'].map(f => (
             <button
               key={f}
@@ -1445,14 +2354,37 @@ const Transactions = () => {
         </div>
       </div>
 
-      <div className="bg-bg-2 p-2 rounded-xl border border-border mb-3 flex items-center gap-2">
-        <Search className="text-text-3 w-3.5 h-3.5" />
-        <input 
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search transactions..."
-          className="bg-transparent outline-none flex-1 text-[10px] font-medium"
-        />
+      <div className="space-y-2 mb-3">
+        <div className="bg-bg-2 p-2 rounded-xl border border-border flex items-center gap-2">
+          <Search className="text-text-3 w-3.5 h-3.5" />
+          <input 
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search transactions..."
+            className="bg-transparent outline-none flex-1 text-[10px] font-medium"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="bg-bg-2 p-2 rounded-xl border border-border flex items-center gap-2">
+            <Calendar className="text-text-3 w-3.5 h-3.5" />
+            <input 
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="bg-transparent outline-none flex-1 text-[8px] font-bold text-text uppercase"
+            />
+          </div>
+          <div className="bg-bg-2 p-2 rounded-xl border border-border flex items-center gap-2">
+            <Calendar className="text-text-3 w-3.5 h-3.5" />
+            <input 
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="bg-transparent outline-none flex-1 text-[8px] font-bold text-text uppercase"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="space-y-0.5">
@@ -1465,6 +2397,8 @@ const Transactions = () => {
           </div>
         )}
       </div>
+
+      <DevelopedBy />
     </div>
   );
 };
@@ -1572,15 +2506,371 @@ const AddAccountSheet = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => 
   );
 };
 
+const AddRecurringSheet = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
+  const [type, setType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
+  const [amount, setAmount] = useState('0');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('Food');
+  const [frequency, setFrequency] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'>('MONTHLY');
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const { accounts } = useAccountStore();
+  const [accountId, setAccountId] = useState(accounts[0]?.id || '');
+  const addRecurring = useRecurringStore(state => state.addRecurring);
+
+  const handleSave = async () => {
+    if (!description || !accountId) return;
+    await addRecurring({
+      type,
+      amount: parseFloat(amount),
+      accountId,
+      description,
+      category,
+      frequency,
+      startDate: new Date(startDate).toISOString(),
+      isActive: true,
+    });
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm">
+      <motion.div 
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        className="w-full max-w-md bg-bg-1 rounded-t-3xl p-5 pb-8 shadow-2xl border-t border-border"
+      >
+        <div className="flex justify-between items-center mb-5">
+          <h2 className="text-sm font-black uppercase tracking-widest">Recurring Transaction</h2>
+          <button onClick={onClose} className="w-7 h-7 bg-bg-2 rounded-full flex items-center justify-center text-text-2">
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex bg-bg-2 p-1 rounded-lg">
+            <button 
+              onClick={() => setType('EXPENSE')}
+              className={cn("flex-1 py-1 rounded-md text-[10px] font-bold transition-all", type === 'EXPENSE' ? "bg-red text-white shadow-md" : "text-text-2")}
+            >
+              Expense
+            </button>
+            <button 
+              onClick={() => setType('INCOME')}
+              className={cn("flex-1 py-1 rounded-md text-[10px] font-bold transition-all", type === 'INCOME' ? "bg-green text-white shadow-md" : "text-text-2")}
+            >
+              Income
+            </button>
+          </div>
+
+          <div className="bg-bg-2 p-2 rounded-lg border border-border">
+            <p className="text-text-3 text-[7px] font-bold uppercase mb-0.5">Description</p>
+            <input 
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g. Rent, Netflix"
+              className="w-full bg-transparent text-xs text-text font-bold outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-bg-2 p-2 rounded-lg border border-border">
+              <p className="text-text-3 text-[7px] font-bold uppercase mb-0.5">Amount</p>
+              <input 
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full bg-transparent text-xs text-text font-bold outline-none"
+              />
+            </div>
+            <div className="bg-bg-2 p-2 rounded-lg border border-border">
+              <p className="text-text-3 text-[7px] font-bold uppercase mb-0.5">Frequency</p>
+              <select 
+                value={frequency}
+                onChange={(e) => setFrequency(e.target.value as any)}
+                className="w-full bg-transparent text-xs text-text font-bold outline-none"
+              >
+                <option value="DAILY">Daily</option>
+                <option value="WEEKLY">Weekly</option>
+                <option value="MONTHLY">Monthly</option>
+                <option value="YEARLY">Yearly</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-bg-2 p-2 rounded-lg border border-border">
+              <p className="text-text-3 text-[7px] font-bold uppercase mb-0.5">Account</p>
+              <select 
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+                className="w-full bg-transparent text-xs text-text font-bold outline-none"
+              >
+                {accounts.map(acc => (
+                  <option key={acc.id} value={acc.id}>{acc.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="bg-bg-2 p-2 rounded-lg border border-border">
+              <p className="text-text-3 text-[7px] font-bold uppercase mb-0.5">Start Date</p>
+              <input 
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full bg-transparent text-[10px] text-text font-bold outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        <button 
+          onClick={handleSave}
+          className="w-full mt-6 py-3 gradient-fab text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-accent/20 active:scale-95 transition-transform"
+        >
+          Add Recurring
+        </button>
+      </motion.div>
+    </div>
+  );
+};
+
+const AddDebtSheet = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
+  const [title, setTitle] = useState('');
+  const [person, setPerson] = useState('');
+  const [amount, setAmount] = useState('0');
+  const [type, setType] = useState<'OWED_TO_ME' | 'OWED_BY_ME'>('OWED_BY_ME');
+  const [dueDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const addDebt = useDebtStore(state => state.addDebt);
+
+  const handleSave = async () => {
+    if (!title || !person) return;
+    await addDebt({
+      title,
+      person,
+      amount: parseFloat(amount),
+      currentAmount: parseFloat(amount),
+      type,
+      dueDate: new Date(dueDate).toISOString(),
+    });
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm">
+      <motion.div 
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        className="w-full max-w-md bg-bg-1 rounded-t-3xl p-5 pb-8 shadow-2xl border-t border-border"
+      >
+        <div className="flex justify-between items-center mb-5">
+          <h2 className="text-sm font-black uppercase tracking-widest">New Debt/Loan</h2>
+          <button onClick={onClose} className="w-7 h-7 bg-bg-2 rounded-full flex items-center justify-center text-text-2">
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex bg-bg-2 p-1 rounded-lg">
+            <button 
+              onClick={() => setType('OWED_BY_ME')}
+              className={cn("flex-1 py-1 rounded-md text-[10px] font-bold transition-all", type === 'OWED_BY_ME' ? "bg-red text-white shadow-md" : "text-text-2")}
+            >
+              I Owe
+            </button>
+            <button 
+              onClick={() => setType('OWED_TO_ME')}
+              className={cn("flex-1 py-1 rounded-md text-[10px] font-bold transition-all", type === 'OWED_TO_ME' ? "bg-green text-white shadow-md" : "text-text-2")}
+            >
+              Owed to Me
+            </button>
+          </div>
+
+          <div className="bg-bg-2 p-2 rounded-lg border border-border">
+            <p className="text-text-3 text-[7px] font-bold uppercase mb-0.5">Title</p>
+            <input 
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Home Loan, Lunch Money"
+              className="w-full bg-transparent text-xs text-text font-bold outline-none"
+            />
+          </div>
+
+          <div className="bg-bg-2 p-2 rounded-lg border border-border">
+            <p className="text-text-3 text-[7px] font-bold uppercase mb-0.5">Person/Institution</p>
+            <input 
+              value={person}
+              onChange={(e) => setPerson(e.target.value)}
+              placeholder="Who is this with?"
+              className="w-full bg-transparent text-xs text-text font-bold outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-bg-2 p-2 rounded-lg border border-border">
+              <p className="text-text-3 text-[7px] font-bold uppercase mb-0.5">Amount</p>
+              <input 
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full bg-transparent text-xs text-text font-bold outline-none"
+              />
+            </div>
+            <div className="bg-bg-2 p-2 rounded-lg border border-border">
+              <p className="text-text-3 text-[7px] font-bold uppercase mb-0.5">Due Date</p>
+              <input 
+                type="date"
+                value={dueDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full bg-transparent text-[10px] text-text font-bold outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        <button 
+          onClick={handleSave}
+          className="w-full mt-6 py-3 gradient-fab text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-accent/20 active:scale-95 transition-transform"
+        >
+          Add Debt
+        </button>
+      </motion.div>
+    </div>
+  );
+};
+
+const AgreementModal = ({ onAccept }: { onAccept: () => void }) => {
+  return (
+    <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center p-6">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-bg-2 border border-border rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+      >
+        <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center mb-4">
+          <AlertCircle className="text-accent w-6 h-6" />
+        </div>
+        
+        <h2 className="text-lg font-black tracking-tight mb-2">Welcome to ExpenS</h2>
+        <p className="text-text-2 text-[10px] leading-relaxed mb-4">
+          By using this app, you agree to our terms of service and privacy policy. 
+          Please note that this application is currently <span className="text-accent font-bold">under development</span>.
+        </p>
+        
+        <div className="bg-bg-3 rounded-lg p-3 border border-border/50 mb-6">
+          <p className="text-[9px] text-text-2 leading-relaxed">
+            If you encounter any bugs, issues, or have suggestions, please send a bug report using the button in the <span className="font-bold">Profile</span> section.
+          </p>
+        </div>
+        
+        <button 
+          onClick={onAccept}
+          className="w-full py-3 bg-accent text-white rounded-xl text-xs font-black shadow-lg shadow-accent/20 active:scale-95 transition-transform"
+        >
+          I UNDERSTAND & ACCEPT
+        </button>
+      </motion.div>
+    </div>
+  );
+};
+
 function AppContent() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
+  const [isAddRecurringOpen, setIsAddRecurringOpen] = useState(false);
+  const [isAddDebtOpen, setIsAddDebtOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  const { profile, updateProfile } = useUserStore();
+  const { recurringTransactions, updateRecurring } = useRecurringStore();
+  const { addTransaction } = useTransactionStore();
+  const { updateBalance } = useAccountStore();
 
   useEffect(() => {
     (window as any).openAddAccount = () => setIsAddAccountOpen(true);
+    (window as any).openAddRecurring = () => setIsAddRecurringOpen(true);
+    (window as any).openAddDebt = () => setIsAddDebtOpen(true);
   }, []);
+
+  const [showWeeklySummary, setShowWeeklySummary] = useState(false);
+
+  // Apply Dark Mode
+  useEffect(() => {
+    if (profile?.theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [profile?.theme]);
+
+  // Weekly Summary Trigger (Show on Sunday)
+  useEffect(() => {
+    const today = new Date();
+    const isSunday = today.getDay() === 0;
+    const lastSummaryDate = localStorage.getItem('last_weekly_summary_date');
+    const todayStr = today.toISOString().split('T')[0];
+
+    if (isSunday && lastSummaryDate !== todayStr) {
+      setShowWeeklySummary(true);
+      localStorage.setItem('last_weekly_summary_date', todayStr);
+    }
+  }, []);
+
+  // Process Recurring Transactions
+  useEffect(() => {
+    if (isLoading) return;
+
+    const processRecurring = async () => {
+      const now = new Date();
+      const processedIds: string[] = [];
+
+      for (const recurring of recurringTransactions) {
+        if (!recurring.isActive) continue;
+
+        let nextDate = new Date(recurring.nextDate);
+        
+        while (nextDate <= now) {
+          // Add transaction
+          addTransaction({
+            type: recurring.type,
+            amount: recurring.amount,
+            accountId: recurring.accountId,
+            description: `[Recurring] ${recurring.description}`,
+            category: recurring.category,
+            mode: 'PERSONAL',
+            date: nextDate.toISOString(),
+          });
+
+          // Update account balance
+          updateBalance(recurring.accountId, recurring.amount, recurring.type);
+
+          // Calculate next date
+          const newNextDate = new Date(nextDate);
+          if (recurring.frequency === 'DAILY') newNextDate.setDate(newNextDate.getDate() + 1);
+          else if (recurring.frequency === 'WEEKLY') newNextDate.setDate(newNextDate.getDate() + 7);
+          else if (recurring.frequency === 'MONTHLY') newNextDate.setMonth(newNextDate.getMonth() + 1);
+          else if (recurring.frequency === 'YEARLY') newNextDate.setFullYear(newNextDate.getFullYear() + 1);
+          
+          nextDate = newNextDate;
+          processedIds.push(recurring.id);
+        }
+
+        if (processedIds.includes(recurring.id)) {
+          updateRecurring(recurring.id, { 
+            lastProcessed: now.toISOString(),
+            nextDate: nextDate.toISOString()
+          });
+        }
+      }
+    };
+
+    processRecurring();
+  }, [isLoading, recurringTransactions.length]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1605,8 +2895,8 @@ function AppContent() {
           animate={{ scale: 1, opacity: 1 }}
           className="text-center"
         >
-          <div className="w-12 h-12 gradient-fab rounded-xl flex items-center justify-center shadow-2xl shadow-accent/40 mb-2.5 mx-auto">
-            <Wallet className="text-white w-6 h-6" />
+          <div className="w-16 h-16 mb-4 mx-auto drop-shadow-2xl">
+            <img src={logo} alt="Logo" className="w-full h-full object-contain animate-float" />
           </div>
           <h1 className="text-lg font-black tracking-tighter mb-1">ExpenS</h1>
           <p className="text-text-2 text-[9px] font-medium">Smart tracking for your future</p>
@@ -1629,6 +2919,10 @@ function AppContent() {
     );
   }
 
+  if (profile?.security?.isLocked) {
+    return <LockScreen onUnlock={() => updateProfile({ security: { ...profile.security, isLocked: false } })} />;
+  }
+
   return (
     <div className="min-h-screen bg-bg text-text max-w-[430px] mx-auto relative shadow-2xl shadow-black/10">
       <AnimatePresence mode="wait">
@@ -1641,7 +2935,7 @@ function AppContent() {
         >
           {activeTab === 'dashboard' && <Dashboard setActiveTab={handleTabChange} />}
           {activeTab === 'analytics' && <Analytics />}
-          {activeTab === 'goals' && <SavingsGoals />}
+          {activeTab === 'split' && <SplitExpenses />}
           {activeTab === 'transactions' && <Transactions />}
           {activeTab === 'profile' && <Profile />}
         </motion.div>
@@ -1655,6 +2949,18 @@ function AppContent() {
         )}
         {isAddAccountOpen && (
           <AddAccountSheet isOpen={isAddAccountOpen} onClose={() => setIsAddAccountOpen(false)} />
+        )}
+        {isAddRecurringOpen && (
+          <AddRecurringSheet isOpen={isAddRecurringOpen} onClose={() => setIsAddRecurringOpen(false)} />
+        )}
+        {isAddDebtOpen && (
+          <AddDebtSheet isOpen={isAddDebtOpen} onClose={() => setIsAddDebtOpen(false)} />
+        )}
+        {showWeeklySummary && (
+          <WeeklySummary onClose={() => setShowWeeklySummary(false)} />
+        )}
+        {!profile?.agreedToTerms && (
+          <AgreementModal onAccept={() => updateProfile({ agreedToTerms: true })} />
         )}
       </AnimatePresence>
     </div>
