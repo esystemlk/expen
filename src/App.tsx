@@ -2912,7 +2912,7 @@ function AppContent() {
           animate={{ scale: 1, opacity: 1 }}
           className="text-center"
         >
-          <div className="w-16 h-16 mb-4 mx-auto drop-shadow-2xl">
+          <div className="w-28 h-28 mb-6 mx-auto drop-shadow-[0_0_15px_rgba(108,92,231,0.2)]">
             <img src={logo} alt="Logo" className="w-full h-full object-contain animate-float" />
           </div>
           <h1 className="text-lg font-black tracking-tighter mb-1">ExpenS</h1>
